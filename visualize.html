@@ -1,0 +1,382 @@
+<!-- Specter's Music Visualizer -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid Geometric Music Visualizer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #111;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        #controls {
+            background: rgba(20, 20, 20, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-bottom: 1px solid #333;
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #aaa;
+        }
+
+        select, input[type="color"], input[type="file"] {
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        input[type="color"] {
+            padding: 2px;
+            width: 40px;
+            height: 30px;
+        }
+
+        audio {
+            height: 32px;
+        }
+
+        #visualizer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <div class="control-group">
+            <label for="audioSource">Input Mode:</label>
+            <select id="audioSource">
+                <option value="free">Free Mode (Ambient)</option>
+                <option value="file">MP3 File Player</option>
+                <option value="mic">Live Microphone</option>
+            </select>
+        </div>
+
+        <div class="control-group hidden" id="fileInputGroup">
+            <label for="audioFile">Choose MP3:</label>
+            <input type="file" id="audioFile" accept="audio/*">
+        </div>
+        
+        <div class="control-group hidden" id="audioPlayerGroup">
+            <audio id="audioPlayer" controls></audio>
+        </div>
+
+        <div class="control-group">
+            <label for="shapeSelect">Shape:</label>
+            <select id="shapeSelect">
+                <option value="bars">Classic Bars</option>
+                <option value="circle">Pulsing Circle</option>
+                <option value="spikes">Starburst Spikes</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="visualColor">Visual Color:</label>
+            <input type="color" id="visualColor" value="#00ffcc">
+        </div>
+
+        <div class="control-group">
+            <label for="bgColor">Background:</label>
+            <input type="color" id="bgColor" value="#111111">
+        </div>
+    </div>
+
+    <canvas id="visualizer"></canvas>
+
+    <script>
+        // UI Elements
+        const audioSourceSelect = document.getElementById('audioSource');
+        const fileInputGroup = document.getElementById('fileInputGroup');
+        const audioPlayerGroup = document.getElementById('audioPlayerGroup');
+        const audioFile = document.getElementById('audioFile');
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        const shapeSelect = document.getElementById('shapeSelect');
+        const visualColorPicker = document.getElementById('visualColor');
+        const bgColorPicker = document.getElementById('bgColor');
+
+        // Web Audio & Simulation Variables
+        let audioCtx = null;
+        let analyser = null;
+        let fileSourceNode = null;
+        let micSourceNode = null;
+        let micStream = null; 
+        
+        // Base Setup (Defaults to 128 bins for instant Free Mode execution)
+        let bufferLength = 128;
+        let dataArray = new Uint8Array(bufferLength);
+        let freeModeTime = 0; 
+
+        // Resize canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 1. Input Routing Orchestrator
+        audioSourceSelect.addEventListener('change', function() {
+            const mode = this.value;
+
+            if (mode === 'free') {
+                fileInputGroup.classList.add('hidden');
+                audioPlayerGroup.classList.add('hidden');
+                audioPlayer.pause();
+                stopMicAudio();
+            } 
+            else if (mode === 'mic') {
+                fileInputGroup.classList.add('hidden');
+                audioPlayerGroup.classList.add('hidden');
+                audioPlayer.pause();
+                setupMicAudio();
+            } 
+            else if (mode === 'file') {
+                fileInputGroup.classList.remove('hidden');
+                audioPlayerGroup.classList.remove('hidden');
+                stopMicAudio();
+                setupFileAudio();
+            }
+        });
+
+        // 2. Handle MP3 Selection Flow
+        audioFile.addEventListener('change', function() {
+            const files = this.files;
+            if (files.length === 0) return;
+            
+            const fileURL = URL.createObjectURL(files[0]);
+            audioPlayer.src = fileURL;
+            audioPlayer.load();
+            audioPlayer.play();
+            
+            setupFileAudio();
+        });
+
+        // Audio Context Bootstrapper
+        function initAudioEngine() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256; // 128 frequency bins
+                bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Routing Path: MP3
+        function setupFileAudio() {
+            initAudioEngine();
+            if (!fileSourceNode) {
+                fileSourceNode = audioCtx.createMediaElementSource(audioPlayer);
+            }
+            fileSourceNode.disconnect();
+            fileSourceNode.connect(analyser);
+            analyser.disconnect();
+            analyser.connect(audioCtx.destination); 
+        }
+
+        // Routing Path: Microphone
+        function setupMicAudio() {
+            initAudioEngine();
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then(function(stream) {
+                    micStream = stream;
+                    micSourceNode = audioCtx.createMediaStreamSource(stream);
+                    micSourceNode.connect(analyser);
+                    analyser.disconnect(); 
+                })
+                .catch(function(err) {
+                    console.error('Microphone access denied:', err);
+                    alert('Could not access microphone. Falling back to Free Mode.');
+                    audioSourceSelect.value = 'free';
+                    audioSourceSelect.dispatchEvent(new Event('change'));
+                });
+        }
+
+        // Disconnect and shutdown mic recording stream
+        function stopMicAudio() {
+            if (micStream) {
+                micStream.getTracks().forEach(track => track.stop());
+                micStream = null;
+            }
+            if (micSourceNode) {
+                micSourceNode.disconnect();
+                micSourceNode = null;
+            }
+        }
+
+        // 3. Ambient Math Generator (The Free Mode Engine, controls the visuals with no music sync)
+        function simulateAmbientFrequencies() {
+            freeModeTime += 0.025; // Speed of the animations evolving
+
+            for (let i = 0; i < bufferLength; i++) {
+                // Layer multiple mathematical sine waves moving at different speeds
+                const wave1 = Math.sin(freeModeTime + i * 0.12);
+                const wave2 = Math.cos(freeModeTime * 0.65 + i * 0.08);
+                const wave3 = Math.sin(freeModeTime * 1.32 + i * 0.25);
+                
+                // Blend and normalize them (-1 to 1 range)
+                const blendedWave = (wave1 + wave2 + wave3) / 3;
+                
+                // Map the results cleanly to a natural audio frequency curve (0-255 scaling)
+                // Bass frequencies (lower index values) are given a natural amplification bump
+                const bassBias = Math.max(0, (bufferLength - i) / bufferLength);
+                const magnitude = (blendedWave + 1) * 100 + (bassBias * 45);
+                
+                dataArray[i] = Math.min(255, Math.max(0, magnitude));
+            }
+        }
+
+        // 4. Main Rendering Framework
+        function draw() {
+            requestAnimationFrame(draw);
+
+            const currentMode = audioSourceSelect.value;
+
+            // Fetch live audio data OR run math injection
+            if (currentMode === 'free') {
+                simulateAmbientFrequencies();
+            } else if (analyser) {
+                analyser.getByteFrequencyData(dataArray);
+            }
+
+            // Canvas Painting
+            ctx.fillStyle = bgColorPicker.value;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const visualColor = visualColorPicker.value;
+            ctx.fillStyle = visualColor;
+            ctx.strokeStyle = visualColor;
+
+            const currentShape = shapeSelect.value;
+            if (currentShape === 'bars') drawBars();
+            else if (currentShape === 'circle') drawCircle();
+            else if (currentShape === 'spikes') drawSpikes();
+        }
+
+        // --- GRAPHICS EQUATIONS FOR VISUALIZERS---
+        function drawBars() {
+            const barWidth = (canvas.width / bufferLength) * 1.5;
+            let x = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = (dataArray[i] / 255) * (canvas.height * 0.7);
+                ctx.globalAlpha = dataArray[i] / 255 + 0.15;
+                ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+                x += barWidth;
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        function drawCircle() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            let sum = 0;
+            for(let i = 0; i < bufferLength; i++) sum += dataArray[i];
+            const average = sum / bufferLength;
+            const baseRadius = 80 + (average * 0.5);
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, baseRadius, 0, Math.PI * 2);
+            ctx.globalAlpha = 0.25;
+            ctx.fill();
+
+            ctx.beginPath();
+            for (let i = 0; i < bufferLength; i++) {
+                const angle = (i / bufferLength) * Math.PI * 2;
+                const offset = (dataArray[i] / 255) * 120;
+                const r = baseRadius + offset;
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
+
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.globalAlpha = 0.8;
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        }
+
+        function drawSpikes() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const innerRadius = 50;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+
+            for (let i = 0; i < bufferLength; i++) {
+                const angle = (i / bufferLength) * Math.PI * 2;
+                const spikeLength = (dataArray[i] / 255) * 220;
+                const startX = centerX + Math.cos(angle) * innerRadius;
+                const startY = centerY + Math.sin(angle) * innerRadius;
+                const endX = centerX + Math.cos(angle) * (innerRadius + spikeLength);
+                const endY = centerY + Math.sin(angle) * (innerRadius + spikeLength);
+
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+            }
+        }
+
+        // Device click validation
+        canvas.addEventListener('click', () => {
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        });
+
+        // Initialize display immediately on page load
+        draw();
+    </script>
+</body>
+</html>
