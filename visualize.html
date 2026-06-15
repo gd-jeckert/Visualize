@@ -112,6 +112,7 @@
                 <option value="bars">Classic Bars</option>
                 <option value="circle">Pulsing Circle</option>
                 <option value="spikes">Starburst Spikes</option>
+                <option value="lava">Lava Lamp</option>
             </select>
         </div>
 
@@ -302,6 +303,7 @@
             if (currentShape === 'bars') drawBars();
             else if (currentShape === 'circle') drawCircle();
             else if (currentShape === 'spikes') drawSpikes();
+            else if (currentShape === 'lava') drawLava();
         }
 
         // --- GRAPHICS EQUATIONS FOR VISUALIZERS---
@@ -368,6 +370,96 @@
                 ctx.lineTo(endX, endY);
                 ctx.stroke();
             }
+        }
+        // --- Hold blob state  ---
+        let lavaBlobs = [];
+        const NUM_BLOBS = 25;
+
+        function initLavaBlobs() {
+            lavaBlobs = [];
+            for (let i = 0; i < NUM_BLOBS; i++) {
+                lavaBlobs.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: 15 + Math.random() * 35,
+                    speedY: 0,
+                    freqIndex: Math.floor(Math.random() * bufferLength), // which frequency bin drives this blob
+                    hueShift: Math.random() * 40 - 20 // slight color variation per blob
+                });
+            }
+        }
+
+        // --- GRAPHICS EQUATIONS FOR VISUALIZERS---
+
+        function drawLava() {
+            // Initialize blobs on first call
+            if (lavaBlobs.length === 0) {
+                initLavaBlobs();
+            }
+
+            // Semi-transparent background fill for trail/ghosting effect (classic lava lamp persistence)
+            ctx.globalAlpha = 0.12;
+            ctx.fillStyle = bgColorPicker.value;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0;
+
+            const visualColor = visualColorPicker.value;
+
+            for (let b = 0; b < lavaBlobs.length; b++) {
+                const blob = lavaBlobs[b];
+
+                // Read audio energy for this blob's assigned frequency bin
+                const audioValue = dataArray[blob.freqIndex] / 255; // 0..1
+
+                // Blobs rise when their frequency band is active, fall gently otherwise
+                // Bass-heavy frequencies (lower indices) get more upward thrust
+                const bassBoost = 1.0 + ((bufferLength - blob.freqIndex) / bufferLength) * 1.5;
+                blob.speedY += (audioValue * bassBoost - 0.3) * 2;
+
+                // Damping so blobs don't fly off uncontrollably
+                blob.speedY *= 0.92;
+
+                // Slight horizontal drift for organic movement
+                blob.x += Math.sin(performance.now() * 0.001 + b) * 0.3;
+
+                // Move vertically
+                blob.y += blob.speedY;
+
+                // Wrap around screen edges
+                if (blob.y < -blob.radius * 2) {
+                    blob.y = canvas.height + blob.radius * 2;
+                    blob.x = Math.random() * canvas.width;
+                } else if (blob.y > canvas.height + blob.radius * 2) {
+                    blob.y = -blob.radius * 2;
+                    blob.x = Math.random() * canvas.width;
+                }
+
+                // Dynamic radius pulsing based on audio
+                const pulseRadius = blob.radius + (audioValue * blob.radius * 0.6);
+
+                // Draw glowing blob using radial gradient
+                const gradient = ctx.createRadialGradient(
+                    blob.x, blob.y, 0,
+                    blob.x, blob.y, pulseRadius
+                );
+
+                // Convert hex to RGB for alpha manipulation
+                const r = parseInt(visualColor.slice(1, 3), 16);
+                const g = parseInt(visualColor.slice(3, 5), 16);
+                const bl = parseInt(visualColor.slice(5, 7), 16);
+
+                gradient.addColorStop(0, `rgba(${r}, ${g}, ${bl}, 0.9)`);
+                gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${bl}, 0.5)`);
+                gradient.addColorStop(1, `rgba(${r}, ${g}, ${bl}, 0.0)`);
+
+                ctx.globalAlpha = 0.7 + audioValue * 0.3;
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(blob.x, blob.y, pulseRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.globalAlpha = 1.0;
         }
 
         // Device click validation
