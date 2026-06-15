@@ -83,6 +83,87 @@
         .hidden {
             display: none !important;
         }
+
+        #playlistGroup {
+            gap: 10px;
+        }
+
+        #playlistContainer {
+            position: absolute;
+            top: 100px; /* Below controls bar */
+            right: 20px;
+            width: 300px;
+            max-height: calc(100vh - 90px);
+            overflow-y: auto;
+            background: rgba(20, 20, 20, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 10px;
+            z-index: 10;
+        }
+
+        #playlistContainer ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        #playlist li {
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: #2a2a2a;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #playlist li:hover {
+            background: #3a3a3a;
+        }
+
+        #playlist li.active {
+            background: #444;
+            color: #00ffcc;
+            font-weight: bold;
+        }
+
+        #playlist li .remove-btn {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0 4px;
+        }
+
+        #playlist li .remove-btn:hover {
+            color: #ff4444;
+        }
+
+        button {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        #trackTitle {
+            font-size: 0.85rem;
+            color: #ccc;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -104,6 +185,19 @@
         
         <div class="control-group hidden" id="audioPlayerGroup">
             <audio id="audioPlayer" controls></audio>
+        </div>
+
+        <div class="control-group hidden" id="playlistGroup">
+            <label>Playlist:</label>
+            <input type="file" id="playlistInput" accept="audio/*" multiple>
+            <button id="prevBtn">⏮</button>
+            <button id="nextBtn">⏭</button>
+            <button id="shuffleBtn">🔀 Shuffle</button>
+            <span id="trackTitle"></span>
+        </div>
+
+        <div id="playlistContainer" class="hidden">
+            <ul id="playlist"></ul>
         </div>
 
         <div class="control-group">
@@ -155,6 +249,11 @@
         let dataArray = new Uint8Array(bufferLength);
         let freeModeTime = 0; 
 
+        // Playlist variiables
+        let playlist = [];          // Array of {name, url, element} objects
+        let currentTrackIndex = -1;
+        let isShuffled = false;
+
         // Resize canvas
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -172,22 +271,31 @@
                 audioPlayerGroup.classList.add('hidden');
                 audioPlayer.pause();
                 stopMicAudio();
+                //Handle Play list buttons
+                document.getElementById('playlistGroup').classList.add('hidden');
+                document.getElementById('playlistContainer').classList.add('hidden');
             } 
             else if (mode === 'mic') {
                 fileInputGroup.classList.add('hidden');
                 audioPlayerGroup.classList.add('hidden');
                 audioPlayer.pause();
                 setupMicAudio();
+                //Handle Play list buttons
+                document.getElementById('playlistGroup').classList.add('hidden');
+                document.getElementById('playlistContainer').classList.add('hidden');
             } 
             else if (mode === 'file') {
                 fileInputGroup.classList.remove('hidden');
                 audioPlayerGroup.classList.remove('hidden');
+                //Handle Play list buttons
+                document.getElementById('playlistGroup').classList.remove('hidden');
+                document.getElementById('playlistContainer').classList.remove('hidden');
                 stopMicAudio();
                 setupFileAudio();
             }
         });
 
-        // 2. Handle MP3 Selection Flow
+/*         // 2. Handle MP3 Selection Flow
         audioFile.addEventListener('change', function() {
             const files = this.files;
             if (files.length === 0) return;
@@ -198,7 +306,113 @@
             audioPlayer.play();
             
             setupFileAudio();
+        }); */
+        
+        // 2. Handle MP3 Selection Flow and Playlisting
+        const playlistInput = document.getElementById('playlistInput');
+
+        playlistInput.addEventListener('change', function() {
+            const files = this.files;
+            if (files.length === 0) return;
+
+            for (let file of files) {
+                const fileURL = URL.createObjectURL(file);
+                playlist.push({ name: file.name, url: fileURL });
+            }
+
+            renderPlaylist();
+
+            // If nothing is playing yet, start the first track
+            if (currentTrackIndex === -1 && playlist.length > 0) {
+                loadAndPlayTrack(0);
+            }
         });
+
+        //Render the play list we just created
+        function renderPlaylist() {
+            const list = document.getElementById('playlist');
+            list.innerHTML = '';
+
+            playlist.forEach((track, index) => {
+                const li = document.createElement('li');
+                if (index === currentTrackIndex) li.classList.add('active');
+
+                const span = document.createElement('span');
+                span.textContent = track.name;
+                li.appendChild(span);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = '×';
+                removeBtn.classList.add('remove-btn');
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeFromPlaylist(index);
+                });
+                li.appendChild(removeBtn);
+
+                li.addEventListener('click', () => loadAndPlayTrack(index));
+                list.appendChild(li);
+            });
+        }
+
+        //Lets load and play track from the playlist
+        function loadAndPlayTrack(index) {
+            if (index < 0 || index >= playlist.length) return;
+
+            currentTrackIndex = index;
+            audioPlayer.src = playlist[index].url;
+            audioPlayer.load();
+            audioPlayer.play();
+            document.getElementById('trackTitle').textContent = playlist[index].name;
+
+            setupFileAudio();
+            renderPlaylist(); // Re-render to update active state
+        }
+
+        //Removing a song from playlist
+        function removeFromPlaylist(index) {
+            if (index === currentTrackIndex) {
+                audioPlayer.pause();
+                audioPlayer.src = '';
+                currentTrackIndex = -1;
+                document.getElementById('trackTitle').textContent = '';
+            } else if (index < currentTrackIndex) {
+                currentTrackIndex--;
+            }
+
+            playlist.splice(index, 1);
+            renderPlaylist();
+        }
+
+        function playNext() {
+            if (playlist.length === 0) return;
+
+            let nextIndex;
+            if (isShuffled) {
+                nextIndex = Math.floor(Math.random() * playlist.length);
+            } else {
+                nextIndex = (currentTrackIndex + 1) % playlist.length;
+            }
+            loadAndPlayTrack(nextIndex);
+        }
+
+        function playPrevious() {
+            if (playlist.length === 0 || currentTrackIndex <= 0) return;
+            loadAndPlayTrack(currentTrackIndex - 1);
+        }
+
+        function toggleShuffle() {
+            isShuffled = !isShuffled;
+            document.getElementById('shuffleBtn').style.background = isShuffled ? '#555' : '#333';
+        }
+
+        //Adding the playlist buttons element IDS
+        document.getElementById('prevBtn').addEventListener('click', playPrevious);
+        document.getElementById('nextBtn').addEventListener('click', playNext);
+        document.getElementById('shuffleBtn').addEventListener('click', toggleShuffle);
+
+        // Auto-advance when a track ends
+        audioPlayer.addEventListener('ended', playNext);
 
         // Audio Context Bootstrapper
         function initAudioEngine() {
