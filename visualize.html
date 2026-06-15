@@ -518,6 +518,58 @@
             else if (currentShape === 'circle') drawCircle();
             else if (currentShape === 'spikes') drawSpikes();
             else if (currentShape === 'lava') drawLava();
+
+            // Draw track name overlay in file mode
+            if (currentMode === 'file' && currentTrackIndex >= 0) {
+                drawTrackTitleOverlay();
+            }
+        }
+
+        //Gets the Canvas layout and formats the track title to be displayed for overlay
+        function drawTrackTitleOverlay() {
+            const text = playlist[currentTrackIndex]?.name || '';
+            if (!text) return;
+
+            const padding = 20;
+            const cornerX = padding;
+            const cornerY = canvas.height - padding;
+
+            ctx.font = 'bold 16px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+            const metrics = ctx.measureText(text);
+            const textWidth = metrics.width;
+            const pillHeight = 36;
+            const pillPadding = 12;
+            const pillWidth = textWidth + pillPadding * 2;
+
+            // Draw semi-transparent dark background pill (right-aligned at bottom)
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = '#000';
+            const pillX = cornerX;  // bottom-left
+            const pillY = cornerY - pillHeight;
+            ctx.beginPath();
+            roundRect(ctx, pillX, pillY, pillWidth, pillHeight, 8);
+            ctx.fill();
+
+            // Draw text
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = '#ffffff';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, pillX + pillPadding, pillY + pillHeight / 2);
+        }
+
+        // Helper: rounded rectangle path
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
         }
 
         // --- GRAPHICS EQUATIONS FOR VISUALIZERS---
