@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hybrid Geometric Music Visualizer</title>
+    <title>Specters Hybrid Geometric Music Visualizer</title>
     <style>
         * {
             box-sizing: border-box;
@@ -164,6 +164,38 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .playlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #333;
+            border-radius: 8px 8px 0 0;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .playlist-header:active {
+            cursor: grabbing;
+        }
+
+        #closePlaylistBtn {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
+
+        #closePlaylistBtn:hover {
+            color: #ff4444;
+        }
+
+        #playlistContainer ul {
+            padding-top: 8px;
+            border-radius: 0 0 8px 8px;
+        }
     </style>
 </head>
 <body>
@@ -197,6 +229,10 @@
         </div>
 
         <div id="playlistContainer" class="hidden">
+            <div class="playlist-header">
+                <span>Playlist</span>
+                <button id="closePlaylistBtn">✕</button>
+            </div>
             <ul id="playlist"></ul>
         </div>
 
@@ -491,6 +527,44 @@
                 dataArray[i] = Math.min(255, Math.max(0, magnitude));
             }
         }
+
+        // --- Playlist Container Dragging ---
+        const playlistContainer = document.getElementById('playlistContainer');
+        const playlistHeader = playlistContainer.querySelector('.playlist-header');
+        let isDragging = false;
+        let dragOffsetX = 0, dragOffsetY = 0;
+
+        playlistHeader.addEventListener('mousedown', (e) => {
+            if (e.target.id === 'closePlaylistBtn') return;
+
+            isDragging = true;
+            e.preventDefault(); // prevent text selection
+
+            const rect = playlistContainer.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+
+            // Remove transform centering so we can position freely
+            playlistContainer.style.transform = 'none';
+            playlistHeader.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const x = e.clientX - dragOffsetX;
+            const y = e.clientY - dragOffsetY;
+
+            playlistContainer.style.left = `${x}px`;
+            playlistContainer.style.top = `${y}px`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            playlistHeader.style.cursor = 'grab';
+        });        
 
         // 4. Main Rendering Framework
         function draw() {
