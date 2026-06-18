@@ -545,37 +545,52 @@
         let isDragging = false;
         let dragOffsetX = 0, dragOffsetY = 0;
 
-        playlistHeader.addEventListener('mousedown', (e) => {
+        const startDrag = (e) => {
             if (e.target.id === 'closePlaylistBtn') return;
 
             isDragging = true;
-            e.preventDefault(); // prevent text selection
+            e.preventDefault(); // prevent text selection / scroll
 
             const rect = playlistContainer.getBoundingClientRect();
-            dragOffsetX = e.clientX - rect.left;
-            dragOffsetY = e.clientY - rect.top;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            dragOffsetX = clientX - rect.left;
+            dragOffsetY = clientY - rect.top;
 
             // Remove transform centering so we can position freely
             playlistContainer.style.transform = 'none';
             playlistHeader.style.cursor = 'grabbing';
-        });
+        };
 
-        document.addEventListener('mousemove', (e) => {
+        const onDrag = (e) => {
             if (!isDragging) return;
             e.preventDefault();
 
-            const x = e.clientX - dragOffsetX;
-            const y = e.clientY - dragOffsetY;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const x = clientX - dragOffsetX;
+            const y = clientY - dragOffsetY;
 
             playlistContainer.style.left = `${x}px`;
             playlistContainer.style.top = `${y}px`;
-        });
+        };
 
-        document.addEventListener('mouseup', () => {
+        const endDrag = () => {
             if (!isDragging) return;
             isDragging = false;
             playlistHeader.style.cursor = 'grab';
-        });        
+        };
+
+        // Mouse events (desktop)
+        playlistHeader.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', endDrag);
+
+        // Touch events (mobile)
+        playlistHeader.addEventListener('touchstart', startDrag, { passive: false });
+        document.addEventListener('touchmove', onDrag, { passive: false });
+        document.addEventListener('touchend', endDrag);       
 
         // 4. Main Rendering Framework
         function draw() {
