@@ -196,6 +196,27 @@
             padding-top: 8px;
             border-radius: 0 0 8px 8px;
         }
+        #hideControlsBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(50, 50, 50, 0.8);
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        #hideControlsBtn:hover {
+            background: rgba(70, 70, 70, 0.9);
+        }
+
+        #controls.hidden-controls {
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -258,6 +279,9 @@
         </div>
     </div>
 
+    !--Hide controls Button--!
+     <button id="hideControlsBtn" style="position: fixed; bottom: 20px; right: 20px; z-index: 100; background: rgba(50,50,50,0.8); border: 1px solid #555; color: #fff; padding: 8px 14px; border-radius: 6px; cursor: pointer;">👁 Hide Controls</button>
+    
     <canvas id="visualizer"></canvas>
 
     <script>
@@ -296,6 +320,21 @@
         const NUM_PLASMA_NODES = 18;
         let plasmaArcs = [];  // array of { from, to, life } for lightning bolts
 
+        const hideControlsBtn = document.getElementById('hideControlsBtn');
+        hideControlsBtn.addEventListener('click', function() {
+            const controls = document.getElementById('controls');
+            const playlistContainer = document.getElementById('playlistContainer');
+            
+            controls.classList.toggle('hidden-controls');
+            playlistContainer.classList.toggle('hidden');
+            
+            if (controls.classList.contains('hidden-controls')) {
+                this.textContent = '👁 Show Controls';
+            } else {
+                this.textContent = '👁 Hide Controls';
+            }
+        });
+        
         // Resize canvas
         function resizeCanvas() {
             canvas.width = window.innerWidth;
