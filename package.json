@@ -1,0 +1,16 @@
+{
+  "name": "Specters Hybrid Geometric Music Visualizer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main_electron.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "Joel Eckert",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^42.4.1"
+  }
+}

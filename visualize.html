@@ -300,11 +300,8 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-
-            canvas.addEventListener('resize', () => {
-            // ... existing resize code ...
-            initPlasma();   // reposition nodes for new canvas size
-});
+            //Resize Plasma for Electric Visualizer
+            initPlasma();
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
