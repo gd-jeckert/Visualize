@@ -7,7 +7,7 @@ function createWindow () {
         height: 400,
         frame: true, // Hides the default title bar
         transparent: false,
-        icon: path.join(__dirname, 'icons/icon.png'),
+        icon: path.join(__dirname, 'icon.png'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: true,
